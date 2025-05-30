@@ -5,84 +5,102 @@ import { useSelector } from "react-redux";
 import Heading from "../../components/Heading";
 import { baseApiURL } from "../../baseUrl";
 
-const Marks = () => {
-  const userData = useSelector((state) => state.userData);
-  const [internal, setInternal] = useState();
-  const [external, setExternal] = useState();
+const StudentAttendance = () => {
+    const userData = useSelector((state) => state.userData);
+    const [groupedAttendance, setGroupedAttendance] = useState({});
 
-  useEffect(() => {
-    const headers = {
-      "Content-Type": "application/json",
+    useEffect(() => {
+        const headers = {
+            "Content-Type": "application/json",
+        };
+
+        if (userData.enrollmentNo) {
+            axios
+                .post(
+                    `${baseApiURL()}/attendance/getAttendance`,
+                    { enrollmentNo: userData.enrollmentNo },
+                    { headers }
+                )
+                .then((response) => {
+                    if (response.data.success && response.data.record) {
+                        // Group attendance records by subject
+                        const records = response.data.record.records;
+                        const grouped = {};
+
+                        records.forEach((entry) => {
+                            if (!grouped[entry.subject]) {
+                                grouped[entry.subject] = [];
+                            }
+                            grouped[entry.subject].push({
+                                date: new Date(entry.date).toLocaleDateString("en-GB", {
+                                    day: "numeric",
+                                    month: "short",
+                                    year: "numeric",
+                                }),
+                                status: entry.status,
+                            });
+                        });
+
+                        setGroupedAttendance(grouped);
+                    } else {
+                        toast.error(response.data.message || "No attendance found");
+                    }
+                })
+                .catch((error) => {
+                    console.error(error);
+                    toast.error("Failed to fetch attendance");
+                });
+        }
+    }, [userData.enrollmentNo]);
+
+    const calculatePercentage = (records) => {
+        const total = records.length;
+        const presentCount = records.filter((entry) => entry.status === "Present").length;
+        return ((presentCount / total) * 100).toFixed(2); // 2 decimal places
     };
-    axios
-      .post(
-        `${baseApiURL()}/marks/getMarks`,
-        { enrollmentNo: userData.enrollmentNo },
-        {
-          headers: headers,
-        }
-      )
-      .then((response) => {
-        if (response.data.length !== 0) {
-          setInternal(response.data.Mark[0].internal);
-          setExternal(response.data.Mark[0].external);
-        }
-      })
-      .catch((error) => {
-        toast.dismiss();
-        console.log(error);
-      });
-  }, [userData.enrollmentNo]);
 
-  return (
-    <div className="w-full mx-auto mt-10 flex justify-center items-start flex-col mb-10">
-      <Heading title={`Marks of Semester ${userData.semester}`} />
-      <div className="mt-14 w-full flex gap-20">
-        {internal && (
-          <div className="w-1/2 shadow-md p-4">
-            <p className="border-b-2 border-red-500 text-2xl font-semibold pb-2">
-              Internal Marks (Out of 40)
-            </p>
-            <div className="mt-5">
-              {Object.keys(internal).map((item, index) => {
-                return (
-                  <div
-                    key={index}
-                    className="flex justify-between items-center w-full text-lg mt-2"
-                  >
-                    <p className="w-full">{item}</p>
-                    <span>{internal[item]}</span>
-                  </div>
-                );
-              })}
+    return (
+        <div className="w-full mx-auto mt-10 flex justify-center items-start flex-col mb-10">
+            <Heading title={`Attendance for Semester ${userData.semester}`} />
+            <div className="mt-14 w-full flex flex-wrap gap-8">
+                {Object.keys(groupedAttendance).length === 0 ? (
+                    <p className="text-gray-600">No Attendance Available At The Moment!</p>
+                ) : (
+                    Object.entries(groupedAttendance).map(([subject, records]) => (
+                        <div
+                            key={subject}
+                            className="w-full md:w-[45%] shadow-md p-6 rounded-md bg-gray-50"
+                        >
+                            <h3 className="text-xl font-semibold border-b-2 border-blue-400 pb-2 mb-2">
+                                {subject}
+                            </h3>
+                            <p className="text-sm mb-4 text-gray-700">
+                                Attendance Percentage:{" "}
+                                <span className="font-semibold text-blue-600">
+                                    {calculatePercentage(records)}%
+                                </span>
+                            </p>
+                            <ul className="space-y-2">
+                                {records.map((entry, index) => (
+                                    <li
+                                        key={index}
+                                        className={`flex justify-between items-center px-3 py-2 rounded ${
+                                            entry.status === "Present"
+                                                ? "bg-green-100 text-green-800"
+                                                : "bg-red-100 text-red-800"
+                                        }`}
+                                    >
+                                        <span>{entry.date}</span>
+                                        <span>{entry.status}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    ))
+                )}
             </div>
-          </div>
-        )}
-        {external && (
-          <div className="w-1/2 shadow-md p-4">
-            <p className="border-b-2 border-red-500 text-2xl font-semibold pb-2">
-              External Marks (Out of 60)
-            </p>
-            <div className="mt-5">
-              {Object.keys(external).map((item, index) => {
-                console.log(external);
-                return (
-                  <div
-                    key={index}
-                    className="flex justify-between items-center w-full text-lg mt-2"
-                  >
-                    <p className="w-full">{item}</p>
-                    <span>{external[item]}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        {!internal && !external && <p>No Marks Available At The Moment!</p>}
-      </div>
-    </div>
-  );
+        </div>
+    );
 };
 
-export default Marks;
+export default StudentAttendance;
